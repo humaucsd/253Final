@@ -1,10 +1,11 @@
+import os
 
 from keras.models import Sequential, Model
 from keras.layers import Flatten, Dense, Dropout, Reshape, Permute, Activation, \
     Input, merge
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D
 
-
+from DataGen2 import ImageDataGeneratorV2
 from convnetskeras.customlayers import convolution2Dgroup, crosschannelnormalization, \
     splittensor, Softmax4D
 from keras import backend as K
@@ -87,6 +88,37 @@ def get_gender_model(weight_dir):
     gender_model = Model(input = alex_model.input, output=fc_gender2)
     return gender_model
 
-print get_gender_model("alexnet_weights.h5").summary()
 
+if __name__ == '__main__':
+    train_data_dir = "Train"
+    val_data_dir = "Validation"
+    test_data_dir = "Test"
+    nb_epoch = 2
+    nb_sample_per_epoch = 32
+    nb_validation_samples = 1000
+    nb_test_samples = 1000
+    gender_model = get_gender_model("alexnet_weights.h5")
+    train_data = ImageDataGeneratorV2()
+    train_data_flow = train_data.flow_from_directory(os.path.join(train_data_dir, "flickr"),
+                                                     os.path.join(train_data_dir, "Pos.json"),
+                                                     os.path.join(train_data_dir, "Neg.json"), output_type='gender')
+    val_data = ImageDataGeneratorV2()
+    val_data_flow = val_data.flow_from_directory(os.path.join(val_data_dir, "flickr"),
+                                                 os.path.join(val_data_dir, "Pos.json"),
+                                                 os.path.join(val_data_dir, "Neg.json"), output_type='gender')
+
+    test_data = ImageDataGeneratorV2()
+    test_data_flow = test_data.flow_from_directory(os.path.join(test_data_dir, "flickr"),
+                                                   os.path.join(test_data_dir, "Pos.json"),
+                                                   os.path.join(test_data_dir, "Neg.json"), output_type='gender')
+
+    gender_model.fit_generator(
+        train_data_flow,
+        samples_per_epoch=nb_sample_per_epoch,
+        nb_epoch=nb_epoch,
+        validation_data=val_data_flow,
+        nb_val_samples=nb_validation_samples
+    )
+
+    scores = gender_model.evaluate_generator(test_data_flow, nb_test_samples)
 

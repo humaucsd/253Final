@@ -1,10 +1,11 @@
+import os
 
 from keras.models import Sequential, Model
 from keras.layers import Flatten, Dense, Dropout, Reshape, Permute, Activation, \
     Input, merge
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D
 
-
+from DataGen2 import ImageDataGeneratorV2
 from convnetskeras.customlayers import convolution2Dgroup, crosschannelnormalization, \
     splittensor, Softmax4D
 from keras import backend as K
@@ -61,7 +62,6 @@ def AlexNet(weights_path=None, heatmap=False):
         dense_3 = Dense(1000,name='dense_3')(dense_3)
         prediction = Activation("softmax",name="softmax")(dense_3)
 
-
     model = Model(input=inputs, output=prediction)
 
     if weights_path:
@@ -93,8 +93,35 @@ def get_landmark_model(weight_dir):
     landmark_model = Model(input = alex_model.input, output=[fc_visibility2, fc_fiducial2])
     return landmark_model
 
-print get_landmark_model("alexnet_weights.h5").summary()
+if __name__ == '__main__':
+    train_data_dir = "Train"
+    val_data_dir = "Validation"
+    test_data_dir = "Test"
+    nb_epoch = 2
+    nb_sample_per_epoch = 32
+    nb_validation_samples = 1000
+    nb_test_samples = 1000
+    landmark_model = get_landmark_model("alexnet_weights.h5")
+    train_data = ImageDataGeneratorV2()
+    train_data_flow = train_data.flow_from_directory(os.path.join(train_data_dir,"flickr"),
+                                                     os.path.join(train_data_dir,"Pos.json"),
+                                                     os.path.join(train_data_dir,"Neg.json"),output_type='landmarkvisibility')
+    val_data = ImageDataGeneratorV2()
+    val_data_flow = val_data.flow_from_directory(os.path.join(val_data_dir, "flickr"),
+                                                     os.path.join(val_data_dir, "Pos.json"),
+                                                     os.path.join(val_data_dir, "Neg.json"), output_type='landmarkvisibility')
 
-# x = Dense(512, activation='relu', input_dim = None, init="he_normal", name = 'fc_detection1', trainable=True)(x)
-# face_detection = Dense(2, activation='softmax', input_dim = None, init="he_normal",  name= 'fc_detection2', trainable=True)(x)
+    test_data = ImageDataGeneratorV2()
+    test_data_flow = test_data.flow_from_directory(os.path.join(test_data_dir, "flickr"),
+                                                 os.path.join(test_data_dir, "Pos.json"),
+                                                 os.path.join(test_data_dir, "Neg.json"), output_type='landmarkvisibility')
 
+    landmark_model.fit_generator(
+        train_data_flow,
+        samples_per_epoch = nb_sample_per_epoch,
+        nb_epoch= nb_epoch,
+        validation_data= val_data_flow,
+        nb_val_samples= nb_validation_samples
+    )
+
+    scores = landmark_model.evaluate_generator(test_data_flow, nb_test_samples)
